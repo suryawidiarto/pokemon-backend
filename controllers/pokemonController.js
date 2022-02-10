@@ -57,36 +57,63 @@ exports.catchPokemon = (req, res) => {
 };
 
 exports.addMyListPokemon = async (req, res) => {
-  const id = req.body.id_pokemon;
-  const detailPokemon = await redisCache(`pokemon:${id}`, 3600, async () => {
-    const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`);
-    return response.data;
-  });
+  try {
+    const id = req.body.id_pokemon;
+    const detailPokemon = await redisCache(`pokemon:${id}`, 3600, async () => {
+      const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      return response.data;
+    });
 
-  const userPokemon = new UserPokemonModel({
-    pokemon: {
-      id_pokemon: detailPokemon.id,
-      name: req.body.name || detailPokemon.name,
-      abilities: detailPokemon.abilities,
-      stats: detailPokemon.stats,
-      moves: detailPokemon.moves,
-      types: detailPokemon.types,
-      images: detailPokemon.sprites,
-    },
-  });
+    const userPokemon = new UserPokemonModel({
+      pokemon: {
+        id_pokemon: detailPokemon.id,
+        default_name: req.body.name || detailPokemon.name,
+        name: req.body.name || detailPokemon.name,
+        abilities: detailPokemon.abilities,
+        stats: detailPokemon.stats,
+        moves: detailPokemon.moves,
+        types: detailPokemon.types,
+        images: detailPokemon.sprites,
+      },
+    });
 
-  const response = await userPokemon.save();
-  res.status(201).send(response);
+    const response = await userPokemon.save();
+    res.status(201).send(response);
+  } catch (err) {
+    console.log(err);
+  }
 };
 
 exports.getMyListPokemon = async (req, res) => {
-  const totalMyPokemon = await UserPokemonModel.find().countDocuments();
-  const myPokemon = await UserPokemonModel.find();
-  res.status(201).json({ totalPokemon: totalMyPokemon, listPokemon: myPokemon });
+  try {
+    const totalMyPokemon = await UserPokemonModel.find().countDocuments();
+    const myPokemon = await UserPokemonModel.find();
+    res.status(201).json({ totalPokemon: totalMyPokemon, listPokemon: myPokemon });
+  } catch (err) {
+    console.log(err);
+  }
 };
 
-exports.renamePokemon = (req, res) => {
-  res.send("POST RENAME POKEMON");
+exports.renamePokemon = async (req, res) => {
+  try {
+    const id = req.body.id;
+    const dataPokemon = await UserPokemonModel.findById(id);
+    let current = dataPokemon.pokemon.rename_count_current;
+    let next = dataPokemon.pokemon.rename_count_next;
+
+    let defaultName = dataPokemon.pokemon.default_name;
+    let rename = defaultName.concat(`-${current}`);
+    const nextFibo = current + next;
+
+    dataPokemon.pokemon.name = rename;
+    dataPokemon.pokemon.rename_count_current = next;
+    dataPokemon.pokemon.rename_count_next = nextFibo;
+
+    const pokemon = await dataPokemon.save();
+    res.status(201).send(pokemon);
+  } catch (err) {
+    console.log(err);
+  }
 };
 
 exports.releasePokemon = (req, res) => {
