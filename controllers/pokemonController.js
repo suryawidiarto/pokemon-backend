@@ -116,6 +116,25 @@ exports.renamePokemon = async (req, res) => {
   }
 };
 
-exports.releasePokemon = (req, res) => {
-  res.send("POST RELEASE POKEMON");
+exports.releasePokemon = async (req, res) => {
+  try {
+    //get random number from 2-10
+    const randNumber = Math.floor(Math.random() * (10 - 2 + 1) + 2);
+
+    //check number is prime
+    for (let i = 2; i < randNumber; i++) {
+      if (randNumber % i == 0) {
+        return res
+          .status(201)
+          .json({ release: "release pokemon failed", isPrime: "false", randNumber: randNumber });
+      }
+    }
+
+    await UserPokemonModel.deleteOne({ _id: req.body._id });
+    res
+      .status(201)
+      .json({ release: "release pokemon success", isPrime: "true", randNumber: randNumber });
+  } catch (err) {
+    console.log(err);
+  }
 };
