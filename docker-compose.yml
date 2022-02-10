@@ -1,6 +1,27 @@
 version: '3.8'
 
 services:
+  pokemon_redis:
+    container_name: pokemon_redis
+    image: redis:6.2
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - 6379:6379
+    networks:
+      - pokemon_network
+
+  pokemon_db:
+    container_name: pokemon_db
+    image: mongo:focal
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin
+    ports:
+      - 27017:27017
+    networks:
+      - pokemon_network
 
   pokemon_server:
     container_name: pokemon_server
@@ -10,3 +31,12 @@ services:
       - ./app/node_modules
     ports:
       - 8080:8080
+    depends_on:
+      - pokemon_redis
+      - pokemon_db
+    networks:
+      - pokemon_network
+
+networks:
+  pokemon_network:
+    name: pokemon_network
