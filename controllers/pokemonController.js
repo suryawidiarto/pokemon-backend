@@ -1,6 +1,35 @@
 const UserPokemonModel = require("../models/pokemonModel");
-const { redisCache } = require("../utils/redisCache");
 const axios = require("axios").default;
+const redis = require("redis");
+
+const redisClient = redis.createClient({
+  url: `${process.env.REDIS_URI}`,
+});
+
+try {
+  (async () => {
+    await redisClient.connect();
+  })();
+} catch (err) {
+  console.log(err);
+}
+
+const redisCache = async (key, timeExpired, apiCallback) => {
+  try {
+    const getData = await redisClient.get(key);
+    if (getData != null) {
+      //getting data from cache
+      return JSON.parse(getData);
+    } else {
+      //getting new data from api
+      const newData = await apiCallback();
+      await redisClient.setEx(key, timeExpired, JSON.stringify(newData));
+      return newData;
+    }
+  } catch (err) {
+    throw Error(err);
+  }
+};
 
 exports.getListPokemon = async (req, res) => {
   try {
@@ -8,18 +37,18 @@ exports.getListPokemon = async (req, res) => {
     const offset = currentPage > 1 ? (currentPage - 1) * 40 : 0;
     const limit = req.query.limit || 40;
 
-    const data = await redisCache(`allPokemon:${currentPage}`, 3600, async () => {
+    const data = await redisCache(`allPokemon:${currentPage}`, 7200, async () => {
       const response = await axios.get(
         `https://pokeapi.co/api/v2/pokemon?offset=${offset}&limit=${limit}`
       );
       return response.data;
     });
 
-    const totalPage = Math.floor(data.count / limit);
+    const totalPage = Math.ceil(data.count / limit);
     const totalData = data.count;
     const allPokemon = data.results;
 
-    res.status(201).json({ currentPage, totalPage, totalData, allPokemon });
+    res.status(201).json({ currentPage, totalPage, limitPage: limit, totalData, allPokemon });
   } catch (err) {
     console.log(err);
   }
@@ -28,7 +57,7 @@ exports.getListPokemon = async (req, res) => {
 exports.getDetailPokemon = async (req, res) => {
   try {
     const id = req.params.IdPokemon;
-    const pokemon = await redisCache(`pokemon:${id}`, 3600, async () => {
+    const pokemon = await redisCache(`pokemon:${id}`, 7200, async () => {
       const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`);
       return response.data;
     });
@@ -59,7 +88,7 @@ exports.catchPokemon = (req, res) => {
 exports.addMyListPokemon = async (req, res) => {
   try {
     const id = req.body.id_pokemon;
-    const detailPokemon = await redisCache(`pokemon:${id}`, 3600, async () => {
+    const detailPokemon = await redisCache(`pokemon:${id}`, 7200, async () => {
       const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`);
       return response.data;
     });
