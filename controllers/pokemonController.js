@@ -76,12 +76,22 @@ exports.getDetailPokemon = async (req, res) => {
   }
 };
 
-exports.catchPokemon = (req, res) => {
-  const probability = Math.random();
-  if (probability > 0.5) {
-    res.json({ catch: "success", probability: probability });
-  } else {
-    res.json({ catch: "failed", probability: probability });
+exports.catchPokemon = async (req, res) => {
+  try {
+    const id = req.params.IdPokemon;
+    const pokemon = await redisCache(`pokemon:${id}`, 7200, async () => {
+      const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      return response.data;
+    });
+
+    const probability = Math.random();
+    if (probability > 0.5) {
+      res.json({ catch: "success", probability: probability, pokemonName: pokemon.name });
+    } else {
+      res.json({ catch: "failed", probability: probability, pokemonName: pokemon.name });
+    }
+  } catch (err) {
+    console.log(err);
   }
 };
 
@@ -96,8 +106,8 @@ exports.addMyListPokemon = async (req, res) => {
     const userPokemon = new UserPokemonModel({
       pokemon: {
         id_pokemon: detailPokemon.id,
-        default_name: req.body.name || detailPokemon.name,
-        name: req.body.name || detailPokemon.name,
+        default_name: req.body.name,
+        name: req.body.name,
         abilities: detailPokemon.abilities,
         stats: detailPokemon.stats,
         moves: detailPokemon.moves,
@@ -115,9 +125,25 @@ exports.addMyListPokemon = async (req, res) => {
 
 exports.getMyListPokemon = async (req, res) => {
   try {
+    const currentPage = parseInt(req.query.page) || 1;
     const totalMyPokemon = await UserPokemonModel.find().countDocuments();
-    const myPokemon = await UserPokemonModel.find();
-    res.status(201).json({ totalPokemon: totalMyPokemon, listPokemon: myPokemon });
+    const limit = req.query.limit || 10;
+    const offset = (currentPage - 1) * limit;
+    const totalPage = Math.ceil(totalMyPokemon / limit);
+    const allMyPokemon = await UserPokemonModel.find().skip(offset).limit(limit);
+    res
+      .status(201)
+      .json({ totalPokemon: totalMyPokemon, totalPage: totalPage, listPokemon: allMyPokemon });
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+exports.getDetailMyPokemon = async (req, res) => {
+  try {
+    const id = req.params.IdPokemon;
+    const detailPokemon = await UserPokemonModel.findById(id);
+    res.status(201).send(detailPokemon);
   } catch (err) {
     console.log(err);
   }
